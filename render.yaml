@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: inventory-pro
+    runtime: node
+    plan: free
+    region: oregon
+    branch: main
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # PUBLIC_HOST is set in the Render dashboard (your custom domain if any)

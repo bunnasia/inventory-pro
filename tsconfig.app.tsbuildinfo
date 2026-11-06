@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/main.tsx","./src/version.ts","./src/vite-env.d.ts","./src/components/ConfirmationToast.tsx","./src/components/Header.tsx","./src/components/InventoryList.tsx","./src/components/ScanField.tsx","./src/components/VoiceCapture.tsx","./src/i18n/index.ts","./src/lib/barcodeReader.ts","./src/lib/storage.ts","./src/lib/voiceParser.ts"],"version":"6.0.3"}

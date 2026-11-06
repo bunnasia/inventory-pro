@@ -1,0 +1,37 @@
+{
+  "name": "inventory-pro",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n server,web -c green,cyan \"tsx watch --clear-screen=false server/index.ts\" \"vite\"",
+    "build": "tsc -b && tsc -p tsconfig.server.json --pretty false && vite build",
+    "start": "tsx server/index.ts",
+    "typecheck": "tsc -b --pretty false && tsc -p tsconfig.server.json --pretty false",
+    "lint": "oxlint src server",
+    "preview": "vite preview --host 0.0.0.0 --port 43200"
+  },
+  "dependencies": {
+    "@fontsource-variable/geist": "^5.3.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "tsx": "^4.23.15",
+    "ws": "^8.21.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@types/ws": "^8.18.1",
+    "@vitejs/plugin-react": "^6.1.1",
+    "concurrently": "^10.0.5",
+    "oxlint": "^1.81.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0"
+  }
+}
