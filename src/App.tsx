@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 import { Header } from "@/components/Header"
 import { ScanField } from "@/components/ScanField"
@@ -18,9 +18,12 @@ export default function App() {
   const [appState, setAppState] = useState<AppState>({ phase: "idle" })
   const [scans, setScans] = useState<ScanEntry[]>([])
 
+  // Stable ref so callbacks never go stale when appState changes
+  const appStateRef = useRef(appState)
+  useEffect(() => { appStateRef.current = appState })
+
   const strings = t(lang)
 
-  // Load persisted scans on mount
   useEffect(() => {
     getAllScans().then(setScans).catch(console.error)
   }, [])
@@ -28,25 +31,6 @@ export default function App() {
   const handleScan = useCallback((barcode: string) => {
     setAppState({ phase: "listening", barcode })
   }, [])
-
-  const handleVoiceResult = useCallback(
-    (result: VoiceResult) => {
-      if (appState.phase !== "listening") return
-
-      if (result.status === "ok") {
-        setAppState({ phase: "confirming", barcode: appState.barcode, quantity: result.quantity })
-        void commitScan(appState.barcode, result.quantity)
-        return
-      }
-
-      if (result.status === "unsupported" || result.status === "timeout" || result.status === "error") {
-        // Fall through to manual quantity entry — show confirmation with 0 so user can edit
-        setAppState({ phase: "confirming", barcode: appState.barcode, quantity: 0 })
-        return
-      }
-    },
-    [appState],
-  )
 
   async function commitScan(barcode: string, quantity: number) {
     try {
@@ -57,29 +41,43 @@ export default function App() {
     }
   }
 
-  const handleToastEdit = useCallback(
-    async (qty: number) => {
-      if (appState.phase !== "confirming") return
-      const { barcode } = appState
-      setAppState({ phase: "confirming", barcode, quantity: qty })
+  // Stable callback — reads state from ref to avoid restarting VoiceCapture on every render
+  const handleVoiceResult = useCallback((result: VoiceResult) => {
+    const state = appStateRef.current
+    if (state.phase !== "listening") return
+    const { barcode } = state
 
-      // Update or create the scan entry
-      setScans((prev) => {
-        const existing = prev.find((s) => s.barcode === barcode && !s.synced)
-        if (existing) {
-          void updateScan(existing.id, { quantity: qty })
-          return prev.map((s) => (s.id === existing.id ? { ...s, quantity: qty } : s))
-        }
-        return prev
-      })
+    if (result.status === "ok") {
+      setAppState({ phase: "confirming", barcode, quantity: result.quantity })
+      void commitScan(barcode, result.quantity)
+      return
+    }
 
-      // If quantity was 0 (voice failed), commit a new entry now
-      if (appState.quantity === 0 && qty > 0) {
-        await commitScan(barcode, qty)
+    // Timeout / error / unsupported — show toast at 0 so user can type manually
+    setAppState({ phase: "confirming", barcode, quantity: 0 })
+  }, []) // intentionally empty — uses appStateRef
+
+  const handleToastEdit = useCallback(async (qty: number) => {
+    const state = appStateRef.current
+    if (state.phase !== "confirming") return
+    const { barcode, quantity: prevQty } = state
+
+    setAppState({ phase: "confirming", barcode, quantity: qty })
+
+    setScans((prev) => {
+      const existing = prev.find((s) => s.barcode === barcode && !s.synced)
+      if (existing) {
+        void updateScan(existing.id, { quantity: qty })
+        return prev.map((s) => (s.id === existing.id ? { ...s, quantity: qty } : s))
       }
-    },
-    [appState],
-  )
+      return prev
+    })
+
+    // If previous qty was 0 (voice failed / manual entry), create the scan now
+    if (prevQty === 0 && qty > 0) {
+      await commitScan(barcode, qty)
+    }
+  }, [])
 
   const handleToastDismiss = useCallback(() => {
     setAppState({ phase: "idle" })
@@ -102,31 +100,32 @@ export default function App() {
       <Header lang={lang} onLangChange={setLang} />
 
       <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-5 flex flex-col gap-4">
-        {/* Sub-tagline */}
         <p className="text-xs text-slate-500 text-center">{strings.appTagline}</p>
 
-        {/* Scanner input */}
         <ScanField
           lang={lang}
           onScan={handleScan}
           disabled={appState.phase === "listening"}
         />
 
-        {/* Voice capture */}
         <VoiceCapture
           lang={lang}
           active={appState.phase === "listening"}
           onResult={handleVoiceResult}
         />
 
-        {/* Voice error/unsupported notice */}
-        {appState.phase === "idle" && (
-          <div className="text-center text-xs text-slate-600 select-none">
+        {appState.phase === "confirming" && appState.quantity === 0 && (
+          <div className="bg-amber-900/30 border border-amber-500/40 rounded-xl p-4 text-sm text-amber-300">
+            Voice did not capture a number — tap <strong>Edit</strong> on the toast below to enter the quantity manually.
+          </div>
+        )}
+
+        {appState.phase === "idle" && scans.length === 0 && (
+          <div className="text-center text-xs text-slate-600 select-none pt-2">
             {strings.micPermission}
           </div>
         )}
 
-        {/* Inventory list */}
         <InventoryList
           scans={scans}
           lang={lang}
@@ -135,7 +134,6 @@ export default function App() {
         />
       </main>
 
-      {/* Confirmation toast */}
       {appState.phase === "confirming" && (
         <ConfirmationToast
           quantity={appState.quantity}
